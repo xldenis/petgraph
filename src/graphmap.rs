@@ -82,8 +82,8 @@ impl<N: Eq + Hash + fmt::Debug, E: fmt::Debug, Ty: EdgeType, S: BuildHasher> fmt
 }
 
 /// A trait group for `GraphMap`'s node identifier.
-pub trait NodeTrait: Copy + Ord + Hash {}
-impl<N> NodeTrait for N where N: Copy + Ord + Hash {}
+pub trait NodeTrait: Copy + Eq + Hash {}
+impl<N> NodeTrait for N where N: Copy + Eq + Hash {}
 
 // non-repr(usize) version of Direction
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -127,10 +127,30 @@ impl PartialEq<Direction> for CompactDirection {
     }
 }
 
+pub trait EdgeTrait<N : NodeTrait> : EdgeType {
+    /// Choose a canonical order for an edge. 
+    /// Typically for an unordered edge this sorts the nodes of the edge
+    /// while for an ordered edge they remain unchanged.
+    fn canonicalize(edge: (N, N)) -> (N, N);
+}
+
+impl<N : NodeTrait> EdgeTrait<N> for Directed {
+    fn canonicalize(edge: (N, N)) -> (N, N) {
+        edge
+    }
+}
+
+impl<N: NodeTrait + Ord>  EdgeTrait<N> for Undirected {
+    fn canonicalize(edge: (N, N)) -> (N, N) {
+        edge
+    }
+}
+
+
 #[cfg(feature = "serde-1")]
 impl<N, E, Ty, S> serde::Serialize for GraphMap<N, E, Ty, S>
 where
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     N: NodeTrait + serde::Serialize,
     E: serde::Serialize,
     S: BuildHasher,
@@ -153,7 +173,7 @@ where
 #[cfg(feature = "serde-1")]
 impl<'de, N, E, Ty, S> serde::Deserialize<'de> for GraphMap<N, E, Ty, S>
 where
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     N: NodeTrait + serde::Deserialize<'de>,
     E: Clone + serde::Deserialize<'de>,
     S: BuildHasher + Default,
@@ -177,7 +197,7 @@ where
 impl<N, E, Ty, S> GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     /// Create a new `GraphMap`
@@ -220,11 +240,7 @@ where
     /// Use their natural order to map the node pair (a, b) to a canonical edge id.
     #[inline]
     fn edge_key(a: N, b: N) -> (N, N) {
-        if Ty::is_directed() || a <= b {
-            (a, b)
-        } else {
-            (b, a)
-        }
+        Ty::canonicalize((a, b))
     }
 
     /// Whether the graph has directed edges.
@@ -639,7 +655,7 @@ impl<N, E, Ty, Item, S> FromIterator<Item> for GraphMap<N, E, Ty, S>
 where
     Item: IntoWeightedEdge<E, NodeId = N>,
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher + Default,
 {
     fn from_iter<I>(iterable: I) -> Self
@@ -661,7 +677,7 @@ impl<N, E, Ty, Item, S> Extend<Item> for GraphMap<N, E, Ty, S>
 where
     Item: IntoWeightedEdge<E, NodeId = N>,
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     fn extend<I>(&mut self, iterable: I)
@@ -783,7 +799,7 @@ impl<'a, N, E, Ty, S> Iterator for Edges<'a, N, E, Ty, S>
 where
     N: 'a + NodeTrait,
     E: 'a,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type Item = (N, N, &'a E);
@@ -818,7 +834,7 @@ impl<'a, N, E, Ty, S> Iterator for EdgesDirected<'a, N, E, Ty, S>
 where
     N: 'a + NodeTrait,
     E: 'a,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type Item = (N, N, &'a E);
@@ -952,7 +968,7 @@ where
 impl<N, E, Ty, S> Index<(N, N)> for GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type Output = E;
@@ -967,7 +983,7 @@ where
 impl<N, E, Ty, S> IndexMut<(N, N)> for GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     fn index_mut(&mut self, index: (N, N)) -> &mut E {
@@ -981,7 +997,7 @@ where
 impl<N, E, Ty, S> Default for GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher + Default,
 {
     fn default() -> Self {
@@ -1123,8 +1139,8 @@ where
 
 impl<N, E, Ty, S> visit::Visitable for GraphMap<N, E, Ty, S>
 where
-    N: Copy + Ord + Hash,
-    Ty: EdgeType,
+    N: Copy + Eq + Hash,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type Map = HashSet<N>;
@@ -1182,7 +1198,7 @@ where
 impl<N, E, Ty, S> visit::NodeCount for GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     fn node_count(&self) -> usize {
@@ -1193,7 +1209,7 @@ where
 impl<N, E, Ty, S> visit::NodeIndexable for GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     fn node_bound(&self) -> usize {
@@ -1216,15 +1232,15 @@ where
 impl<N, E, Ty, S> visit::NodeCompactIndexable for GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
 }
 
 impl<'a, N: 'a, E, Ty, S> visit::IntoNeighbors for &'a GraphMap<N, E, Ty, S>
 where
-    N: Copy + Ord + Hash,
-    Ty: EdgeType,
+    N: Copy + Eq + Hash,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type Neighbors = Neighbors<'a, N, Ty>;
@@ -1235,8 +1251,8 @@ where
 
 impl<'a, N: 'a, E, Ty, S> visit::IntoNeighborsDirected for &'a GraphMap<N, E, Ty, S>
 where
-    N: Copy + Ord + Hash,
-    Ty: EdgeType,
+    N: Copy + Eq + Hash,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type NeighborsDirected = NeighborsDirected<'a, N, Ty>;
@@ -1248,7 +1264,7 @@ where
 impl<N, E, Ty, S> visit::EdgeIndexable for GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     fn edge_bound(&self) -> usize {
@@ -1273,7 +1289,7 @@ where
 impl<'a, N: 'a, E: 'a, Ty, S> visit::IntoEdges for &'a GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type Edges = Edges<'a, N, E, Ty, S>;
@@ -1285,7 +1301,7 @@ where
 impl<'a, N: 'a, E: 'a, Ty, S> visit::IntoEdgesDirected for &'a GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type EdgesDirected = EdgesDirected<'a, N, E, Ty, S>;
@@ -1297,7 +1313,7 @@ where
 impl<'a, N: 'a, E: 'a, Ty, S> visit::IntoEdgeReferences for &'a GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type EdgeRef = (N, N, &'a E);
@@ -1310,7 +1326,7 @@ where
 impl<N, E, Ty, S> visit::EdgeCount for GraphMap<N, E, Ty, S>
 where
     N: NodeTrait,
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     #[inline]
@@ -1322,8 +1338,8 @@ where
 /// The `GraphMap` keeps an adjacency matrix internally.
 impl<N, E, Ty, S> visit::GetAdjacencyMatrix for GraphMap<N, E, Ty, S>
 where
-    N: Copy + Ord + Hash,
-    Ty: EdgeType,
+    N: Copy + Eq + Hash,
+    Ty: EdgeTrait<N>,
     S: BuildHasher,
 {
     type AdjMatrix = ();

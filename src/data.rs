@@ -1,6 +1,7 @@
 //! Graph traits for associated data and graph construction.
 
 use crate::graph::IndexType;
+use crate::graphmap::EdgeTrait;
 #[cfg(feature = "graphmap")]
 use crate::graphmap::{GraphMap, NodeTrait};
 #[cfg(feature = "stable_graph")]
@@ -188,7 +189,7 @@ where
 #[cfg(feature = "graphmap")]
 impl<N, E, Ty> Build for GraphMap<N, E, Ty>
 where
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     N: NodeTrait,
 {
     fn add_node(&mut self, weight: Self::NodeWeight) -> Self::NodeId {
@@ -243,7 +244,7 @@ where
 #[cfg(feature = "graphmap")]
 impl<N, E, Ty> Create for GraphMap<N, E, Ty>
 where
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     N: NodeTrait,
 {
     fn with_capacity(nodes: usize, edges: usize) -> Self {
@@ -354,7 +355,7 @@ where
 #[cfg(feature = "graphmap")]
 impl<N, E, Ty> FromElements for GraphMap<N, E, Ty>
 where
-    Ty: EdgeType,
+    Ty: EdgeTrait<N>,
     N: NodeTrait,
 {
     fn from_elements<I>(iterable: I) -> Self

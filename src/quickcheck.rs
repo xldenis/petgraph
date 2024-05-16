@@ -1,7 +1,7 @@
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 
-use crate::graph::{node_index, IndexType};
+use crate::{graph::{node_index, IndexType}, graphmap::EdgeTrait};
 #[cfg(feature = "stable_graph")]
 use crate::stable_graph::StableGraph;
 use crate::{EdgeType, Graph};
@@ -178,9 +178,9 @@ where
 #[cfg(feature = "graphmap")]
 impl<N, E, Ty> Arbitrary for GraphMap<N, E, Ty>
 where
-    N: NodeTrait + Arbitrary,
+    N: NodeTrait + Arbitrary + Ord,
     E: Arbitrary,
-    Ty: EdgeType + Clone + Send + 'static,
+    Ty: EdgeTrait<N> + Clone + Send + 'static,
 {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         let nodes = usize::arbitrary(g);
